@@ -1,0 +1,30 @@
+# Python
+*.egg-info/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Build & dist
+dist/
+build/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+
+# Local dev
+CLAUDE.md
