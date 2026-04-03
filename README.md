@@ -2,7 +2,7 @@
 
 [![PyPI](https://img.shields.io/pypi/v/mkdocs-stablelinks-plugin)](https://pypi.org/project/mkdocs-stablelinks-plugin/)
 
-Stable internal linking and durable external URLs for [Material for MkDocs](https://squidfunk.github.io/mkdocs-material/) via a page ID system.
+Stable internal linking and durable external URLs for [MkDocs](https://www.mkdocs.org/) via a page ID system.
 
 Authors declare a stable `id` in page front matter. Internal links use `id:` syntax resolved at build time. External durable links use `/go/<id>/` redirect pages that update automatically when pages move.
 
@@ -101,7 +101,7 @@ Share `/go/install-windows/` as a durable external link. When the page moves, re
 
 ### Netlify `_redirects`
 
-Rules are appended to `_redirects` at the site root:
+Rules are written to `_redirects` at the site root:
 
 ```
 # mkdocs-stablelinks — auto-generated, do not edit below this line
@@ -142,5 +142,5 @@ Unresolved `id:` links are preserved in output rather than generating broken HTM
 ## Limitations
 
 - Anchor fragments in `id:` links are not validated against the target page's headings.
-- Requires Material for MkDocs. Other themes are not supported.
+- The ID index page renders using the site theme when possible and falls back to bare HTML for unsupported themes.
 - `redirect_mechanism: netlify` generates a plain `_redirects` file; no other server-side redirect formats are supported.
