@@ -1,5 +1,7 @@
 # mkdocs-stablelinks-plugin
 
+[![PyPI](https://img.shields.io/pypi/v/mkdocs-stablelinks-plugin)](https://pypi.org/project/mkdocs-stablelinks-plugin/)
+
 Stable internal linking and durable external URLs for [Material for MkDocs](https://squidfunk.github.io/mkdocs-material/) via a page ID system.
 
 Authors declare a stable `id` in page front matter. Internal links use `id:` syntax resolved at build time. External durable links use `/go/<id>/` redirect pages that update automatically when pages move.

@@ -26,6 +26,11 @@ dependencies = [
     "mkdocs-material",
 ]
 
+[project.urls]
+Homepage = "https://github.com/dsferg/mkdocs-stablelinks-plugin"
+Repository = "https://github.com/dsferg/mkdocs-stablelinks-plugin"
+Issues = "https://github.com/dsferg/mkdocs-stablelinks-plugin/issues"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0",
