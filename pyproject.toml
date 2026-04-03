@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mkdocs-stablelinks-plugin"
-version = "0.1.0"
+version = "0.1.1"
 description = "Stable internal linking and durable external URLs for MkDocs via a page ID system"
 readme = "README.md"
 license = "MIT"
@@ -23,7 +23,6 @@ classifiers = [
 ]
 dependencies = [
     "mkdocs>=1.5",
-    "mkdocs-material",
 ]
 
 [project.urls]

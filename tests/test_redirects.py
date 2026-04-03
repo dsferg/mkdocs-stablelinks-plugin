@@ -103,3 +103,25 @@ class TestNetlifyRedirects:
         redirects_file = tmp_path / "_redirects"
         if redirects_file.exists():
             assert "no-url" not in redirects_file.read_text()
+
+    def test_repeated_build_does_not_duplicate_rules(self, tmp_path):
+        """Running generate_netlify_redirects twice must not create duplicate rules."""
+        index = _make_index([("my-page", "page.md", "/page/")])
+        generate_netlify_redirects(index, "go", str(tmp_path))
+        generate_netlify_redirects(index, "go", str(tmp_path))
+
+        content = (tmp_path / "_redirects").read_text()
+        assert content.count("/go/my-page/ /page/ 301") == 1
+
+    def test_repeated_build_preserves_user_rules(self, tmp_path):
+        """User-managed rules above the stablelinks block are kept on rebuild."""
+        redirects_file = tmp_path / "_redirects"
+        redirects_file.write_text("/old/ /new/ 301\n")
+
+        index = _make_index([("my-page", "page.md", "/page/")])
+        generate_netlify_redirects(index, "go", str(tmp_path))
+        generate_netlify_redirects(index, "go", str(tmp_path))
+
+        content = redirects_file.read_text()
+        assert content.count("/old/ /new/ 301") == 1
+        assert content.count("/go/my-page/ /page/ 301") == 1

@@ -60,7 +60,12 @@ def generate_netlify_redirects(
     redirect_path: str,
     site_dir: str,
 ) -> None:
-    """Append stablelinks redirect rules to _redirects at the site root."""
+    """Write stablelinks redirect rules to _redirects at the site root.
+
+    If _redirects already exists, any previously written stablelinks block
+    (identified by _NETLIFY_HEADER) is replaced so repeated builds don't
+    accumulate duplicate rules.
+    """
     redirects_file = os.path.join(site_dir, "_redirects")
 
     lines: List[str] = [_NETLIFY_HEADER]
@@ -74,5 +79,15 @@ def generate_netlify_redirects(
         # Nothing to write beyond the header
         return
 
-    with open(redirects_file, "a", encoding="utf-8") as fh:
+    # Preserve any user-managed content that precedes the stablelinks block.
+    existing = ""
+    if os.path.exists(redirects_file):
+        with open(redirects_file, "r", encoding="utf-8") as fh:
+            content = fh.read()
+        marker = content.find(_NETLIFY_HEADER)
+        existing = content[:marker] if marker != -1 else content
+
+    with open(redirects_file, "w", encoding="utf-8") as fh:
+        if existing:
+            fh.write(existing)
         fh.writelines(lines)
