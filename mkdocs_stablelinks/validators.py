@@ -2,7 +2,9 @@
 
 import re
 import logging
-from typing import Dict, Optional
+from typing import Dict
+
+from mkdocs.exceptions import PluginError
 
 log = logging.getLogger("mkdocs.plugins.stablelinks")
 
@@ -23,7 +25,8 @@ def validate_and_register(
     Validate page_id and register it in registry if valid and not duplicate.
 
     Returns True if registration succeeded.
-    Emits warnings/errors via logging on failure.
+    Warns via logging if the ID format is invalid.
+    Raises PluginError if the ID is a duplicate.
     """
     if not is_valid_id(page_id):
         log.warning(
@@ -35,16 +38,12 @@ def validate_and_register(
         return False
 
     if page_id in registry:
-        log.error(
-            "mkdocs-stablelinks: Duplicate id '%s' found in:\n"
-            "  %s\n"
-            "  %s\n"
-            "Each id must be unique across the site.",
-            page_id,
-            registry[page_id],
-            src_path,
+        raise PluginError(
+            f"mkdocs-stablelinks: Duplicate id '{page_id}' found in:\n"
+            f"  {registry[page_id]}\n"
+            f"  {src_path}\n"
+            "Each id must be unique across the site."
         )
-        return False
 
     registry[page_id] = src_path
     return True

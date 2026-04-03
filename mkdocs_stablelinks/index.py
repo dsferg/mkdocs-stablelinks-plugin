@@ -1,13 +1,11 @@
 """ID index construction and lookup."""
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, List, Optional
 
 import yaml
-from mkdocs.config.defaults import MkDocsConfig
 from mkdocs.structure.files import Files
-from mkdocs.structure.pages import Page
 
 from .validators import validate_and_register
 
@@ -50,7 +48,7 @@ class IDIndex:
             if abs_path is None:
                 continue
 
-            page_id = _extract_id(abs_path, src_path)
+            page_id = _extract_id(abs_path)
             if page_id is None:
                 continue
 
@@ -84,7 +82,7 @@ def _normalize(src_path: str) -> str:
     return src_path.replace("\\", "/")
 
 
-def _extract_id(abs_path: str, src_path: str) -> Optional[str]:
+def _extract_id(abs_path: str) -> Optional[str]:
     """Read front matter from a markdown file and return the id field, or None."""
     try:
         with open(abs_path, encoding="utf-8") as fh:

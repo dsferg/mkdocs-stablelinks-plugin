@@ -1,6 +1,7 @@
 """Tests for ID validation."""
 
 import pytest
+from mkdocs.exceptions import PluginError
 from mkdocs_stablelinks.validators import is_valid_id, validate_and_register
 
 
@@ -34,11 +35,10 @@ def test_register_success():
     assert registry == {"my-page": "docs/page.md"}
 
 
-def test_register_duplicate(caplog):
+def test_register_duplicate():
     registry = {"my-page": "docs/original.md"}
-    result = validate_and_register("my-page", "docs/duplicate.md", registry)
-    assert result is False
-    assert "Duplicate id" in caplog.text
+    with pytest.raises(PluginError, match="Duplicate id 'my-page'"):
+        validate_and_register("my-page", "docs/duplicate.md", registry)
 
 
 def test_register_invalid_format(caplog):

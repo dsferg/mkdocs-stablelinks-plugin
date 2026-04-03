@@ -1,12 +1,11 @@
 """Redirect page generation — HTML meta refresh and Netlify _redirects."""
 
+import html as html_lib
 import logging
 import os
 from typing import List
 
-from mkdocs.config.defaults import MkDocsConfig
-
-from .index import IDIndex, PageEntry
+from .index import IDIndex
 
 log = logging.getLogger("mkdocs.plugins.stablelinks")
 
@@ -53,7 +52,7 @@ def generate_html_redirects(
         out_file = os.path.join(out_dir, "index.html")
 
         with open(out_file, "w", encoding="utf-8") as fh:
-            fh.write(_HTML_TEMPLATE.format(url=page_url))
+            fh.write(_HTML_TEMPLATE.format(url=html_lib.escape(page_url)))
 
 
 def generate_netlify_redirects(

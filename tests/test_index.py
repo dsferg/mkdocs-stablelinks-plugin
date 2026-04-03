@@ -3,6 +3,7 @@
 import pytest
 from unittest.mock import MagicMock
 
+from mkdocs.exceptions import PluginError
 from mkdocs_stablelinks.index import IDIndex, _extract_id
 
 
@@ -30,30 +31,30 @@ class TestExtractId:
     def test_extracts_id(self, tmp_path):
         f = tmp_path / "page.md"
         f.write_text("---\nid: my-page\ntitle: My Page\n---\n\n# Content\n")
-        assert _extract_id(str(f), "page.md") == "my-page"
+        assert _extract_id(str(f)) == "my-page"
 
     def test_no_front_matter(self, tmp_path):
         f = tmp_path / "page.md"
         f.write_text("# No front matter here\n")
-        assert _extract_id(str(f), "page.md") is None
+        assert _extract_id(str(f)) is None
 
     def test_front_matter_no_id(self, tmp_path):
         f = tmp_path / "page.md"
         f.write_text("---\ntitle: Only a title\n---\n\n# Content\n")
-        assert _extract_id(str(f), "page.md") is None
+        assert _extract_id(str(f)) is None
 
     def test_missing_file(self, tmp_path):
-        assert _extract_id(str(tmp_path / "ghost.md"), "ghost.md") is None
+        assert _extract_id(str(tmp_path / "ghost.md")) is None
 
     def test_id_as_number_coerced_to_string(self, tmp_path):
         f = tmp_path / "page.md"
         f.write_text("---\nid: 42\n---\n")
-        assert _extract_id(str(f), "page.md") == "42"
+        assert _extract_id(str(f)) == "42"
 
     def test_unclosed_front_matter(self, tmp_path):
         f = tmp_path / "page.md"
         f.write_text("---\nid: my-page\n# no closing delimiter\n")
-        assert _extract_id(str(f), "page.md") is None
+        assert _extract_id(str(f)) is None
 
 
 class TestIDIndex:
@@ -69,15 +70,14 @@ class TestIDIndex:
         assert entry is not None
         assert entry.src_path == "install/windows.md"
 
-    def test_duplicate_id_not_registered(self, tmp_path, caplog):
+    def test_duplicate_id_raises(self, tmp_path):
         files = _make_files(tmp_path, [
             ("a.md", "id: same-id"),
             ("b.md", "id: same-id"),
         ])
         index = IDIndex()
-        index.build(files)
-        assert len(index) == 1
-        assert "Duplicate id" in caplog.text
+        with pytest.raises(PluginError, match="Duplicate id 'same-id'"):
+            index.build(files)
 
     def test_invalid_id_not_registered(self, tmp_path, caplog):
         files = _make_files(tmp_path, [("page.md", "id: Bad_ID")])

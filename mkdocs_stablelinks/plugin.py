@@ -24,6 +24,8 @@ class StablelinksPlugin(BasePlugin[StablelinksConfig]):
     def __init__(self) -> None:
         super().__init__()
         self._index = IDIndex()
+        self._env = None
+        self._nav = None
 
     # ------------------------------------------------------------------
     # on_config
@@ -62,6 +64,20 @@ class StablelinksPlugin(BasePlugin[StablelinksConfig]):
                 "existing content.",
                 redirect_path,
             )
+
+    # ------------------------------------------------------------------
+    # on_env / on_nav
+    # ------------------------------------------------------------------
+
+    def on_env(self, env, config: MkDocsConfig, files: Files):
+        """Store the Jinja2 environment for use in on_post_build."""
+        self._env = env
+        return env
+
+    def on_nav(self, nav, config: MkDocsConfig, files: Files):
+        """Store the navigation for use in on_post_build."""
+        self._nav = nav
+        return nav
 
     # ------------------------------------------------------------------
     # on_page_markdown
@@ -110,4 +126,6 @@ class StablelinksPlugin(BasePlugin[StablelinksConfig]):
             generate_netlify_redirects(self._index, redirect_path, site_dir)
 
         if self.config["index_page"]:
-            generate_index_page(self._index, redirect_path, site_dir)
+            generate_index_page(
+                self._index, redirect_path, site_dir, config, self._nav, self._env
+            )

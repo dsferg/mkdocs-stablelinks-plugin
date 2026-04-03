@@ -82,3 +82,28 @@ class TestResolveLinks:
         md = "[External](https://example.com) and [relative](../other.md)"
         result = resolve_links(md, page, index, "warn")
         assert result == md
+
+    def test_id_link_inside_fenced_code_block_untouched(self):
+        index = _make_index([("my-page", "page.md", "/page/")])
+        page = _make_page("index.md", "/")
+
+        md = "```\n[link](id:my-page)\n```"
+        result = resolve_links(md, page, index, "warn")
+        assert result == md
+
+    def test_id_link_inside_inline_code_untouched(self):
+        index = _make_index([("my-page", "page.md", "/page/")])
+        page = _make_page("index.md", "/")
+
+        md = "Use `[link](id:my-page)` as an example."
+        result = resolve_links(md, page, index, "warn")
+        assert result == md
+
+    def test_id_link_outside_code_block_still_resolved(self):
+        index = _make_index([("my-page", "page.md", "/page/")])
+        page = _make_page("index.md", "/")
+
+        md = "```\n[link](id:my-page)\n```\n\n[real](id:my-page)"
+        result = resolve_links(md, page, index, "warn")
+        assert "```\n[link](id:my-page)\n```" in result
+        assert "[real](page.md)" in result

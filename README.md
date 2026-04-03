@@ -8,9 +8,9 @@ Authors declare a stable `id` in page front matter. Internal links use `id:` syn
 
 ```
 pip install mkdocs-stablelinks-plugin
+```
 
 **Requires Python 3.10+.**
-```
 
 ## Quick start
 
@@ -52,12 +52,12 @@ plugins:
 
 All options are optional. The minimal installation works with no configuration at all.
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `redirect_path` | `go` | URL path prefix for redirect pages, e.g. `/go/<id>/` |
-| `redirect_mechanism` | `both` | Which redirect mechanism(s) to generate |
-| `index_page` | `true` | Generate a `/go/` page listing all registered IDs |
-| `on_unresolved` | `warn` | What to do when an `id:` link cannot be resolved |
+| Option | Default | Accepted values | Description |
+|--------|---------|-----------------|-------------|
+| `redirect_path` | `go` | Any valid URL segment | URL prefix used for all redirect pages and the index page. A page with `id: install-windows` produces a redirect at `/<redirect_path>/install-windows/`. Changing this value after publishing will break any external links that used the old path. |
+| `redirect_mechanism` | `both` | `html`, `netlify`, `both` | Which redirect format(s) to generate. `html` writes a meta-refresh page for each ID under `<site>/<redirect_path>/`. `netlify` appends 301 rules to `_redirects` at the site root. `both` does both. Use `netlify` alone if you deploy to Netlify and want server-side redirects without the extra HTML files. |
+| `index_page` | `true` | `true`, `false` | When enabled, generates a page at `/<redirect_path>/` listing all registered IDs, their titles, and current URLs. The page inherits the site theme and is excluded from search results. Shares the same path as `redirect_path`. |
+| `on_unresolved` | `warn` | `warn`, `error` | What to do when an `id:` link references an ID that no page declares. `warn` logs a warning and preserves the original `id:` syntax in the output. `error` fails the build. |
 
 ## ID format
 
@@ -84,7 +84,7 @@ Anchor fragments are passed through as-is. The plugin does not validate that an 
 
 ## Redirect pages
 
-For each page with an `id`, two redirect mechanisms are available:
+For each page with an `id`, the plugin can generate one or both of the following redirect mechanisms (controlled by `redirect_mechanism`):
 
 ### HTML meta refresh
 
