@@ -1,13 +1,9 @@
 """Integration tests for StablelinksPlugin hook behaviour."""
 
-import os
-import textwrap
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-from mkdocs_stablelinks.plugin import StablelinksPlugin
 from mkdocs_stablelinks.index import PageEntry
-
+from mkdocs_stablelinks.plugin import StablelinksPlugin
 
 # ---------------------------------------------------------------------------
 # Helpers

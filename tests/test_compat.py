@@ -1,7 +1,6 @@
 """Tests for macros plugin ordering check."""
 
 import logging
-import pytest
 from unittest.mock import MagicMock
 
 from mkdocs_stablelinks.compat import check_macros_order
