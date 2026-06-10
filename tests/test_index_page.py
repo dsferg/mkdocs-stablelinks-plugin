@@ -1,6 +1,5 @@
 """Tests for ID index page generation."""
 
-import pytest
 
 from mkdocs_stablelinks.index import IDIndex, PageEntry
 from mkdocs_stablelinks.index_page import generate_index_page
@@ -59,3 +58,11 @@ class TestGenerateIndexPage:
         index = _make_index([("api", "api.md", "/api/", "API")])
         generate_index_page(index, "links", str(tmp_path), None, None, None)
         assert (tmp_path / "links" / "index.html").exists()
+
+    def test_subpath_url_prefix(self, tmp_path):
+        """Sites hosted under a sub-path get the prefix on listed URLs."""
+        index = _make_index([("my-page", "page.md", "page/", "My Page")])
+        generate_index_page(index, "go", str(tmp_path), None, None, None, url_prefix="/repo")
+
+        content = (tmp_path / "go" / "index.html").read_text()
+        assert "/repo/page/" in content

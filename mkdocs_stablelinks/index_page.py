@@ -4,9 +4,9 @@ import html as html_lib
 import logging
 import os
 import types
-from typing import List, Optional
 
 from .index import IDIndex
+from .utils import absolute_url
 
 log = logging.getLogger("mkdocs.plugins.stablelinks")
 
@@ -18,6 +18,7 @@ def generate_index_page(
     config,
     nav,
     env,
+    url_prefix: str = "",
 ) -> None:
     """
     Write the ID index page to <site_dir>/<redirect_path>/index.html.
@@ -28,7 +29,7 @@ def generate_index_page(
     for entry in index.all_entries():
         if entry.url is None:
             continue
-        page_url = entry.url if entry.url.startswith("/") else f"/{entry.url}"
+        page_url = absolute_url(url_prefix, entry.url)
         title = entry.title or entry.page_id
         rows.append({"id": entry.page_id, "title": title, "url": page_url})
 
@@ -36,7 +37,7 @@ def generate_index_page(
         return
 
     content_html = _build_content_html(rows)
-    page_url = f"/{redirect_path}/"
+    page_url = absolute_url(url_prefix, f"{redirect_path}/")
 
     html = _render_with_theme(content_html, page_url, redirect_path, config, nav, env)
     if html is None:
@@ -55,7 +56,7 @@ def _render_with_theme(
     config,
     nav,
     env,
-) -> Optional[str]:
+) -> str | None:
     """
     Render the index page using the MkDocs theme's Jinja2 template.
 
@@ -110,7 +111,7 @@ def _render_with_theme(
         return None
 
 
-def _build_content_html(rows: List[dict]) -> str:
+def _build_content_html(rows: list[dict]) -> str:
     table_rows = "\n      ".join(
         f"<tr>"
         f"<td><code>{html_lib.escape(r['id'])}</code></td>"
