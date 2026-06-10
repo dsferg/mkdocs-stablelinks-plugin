@@ -14,6 +14,7 @@ from .index import IDIndex
 from .index_page import generate_index_page
 from .redirects import generate_html_redirects, generate_netlify_redirects
 from .resolver import resolve_links
+from .utils import url_prefix
 from .validators import validate_redirect_path
 
 log = logging.getLogger("mkdocs.plugins.stablelinks")
@@ -119,14 +120,17 @@ class StablelinksPlugin(BasePlugin[StablelinksConfig]):
         site_dir = config["site_dir"]
         redirect_path = self.config["redirect_path"]
         mechanism = self.config["redirect_mechanism"]
+        # Sites hosted under a sub-path (e.g. GitHub Pages project sites)
+        # need that sub-path prepended to absolute redirect URLs.
+        prefix = url_prefix(config["site_url"])
 
         if mechanism in ("html", "both"):
-            generate_html_redirects(self._index, redirect_path, site_dir)
+            generate_html_redirects(self._index, redirect_path, site_dir, prefix)
 
         if mechanism in ("netlify", "both"):
-            generate_netlify_redirects(self._index, redirect_path, site_dir)
+            generate_netlify_redirects(self._index, redirect_path, site_dir, prefix)
 
         if self.config["index_page"]:
             generate_index_page(
-                self._index, redirect_path, site_dir, config, self._nav, self._env
+                self._index, redirect_path, site_dir, config, self._nav, self._env, prefix
             )

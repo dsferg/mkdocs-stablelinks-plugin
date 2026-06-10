@@ -3,9 +3,9 @@
 import html as html_lib
 import logging
 import os
-from typing import List
 
 from .index import IDIndex
+from .utils import absolute_url
 
 log = logging.getLogger("mkdocs.plugins.stablelinks")
 
@@ -33,6 +33,7 @@ def generate_html_redirects(
     index: IDIndex,
     redirect_path: str,
     site_dir: str,
+    url_prefix: str = "",
 ) -> None:
     """Write an HTML meta-refresh page for each registered page ID."""
     for entry in index.all_entries():
@@ -44,8 +45,7 @@ def generate_html_redirects(
             )
             continue
 
-        # Ensure the URL starts with /
-        page_url = entry.url if entry.url.startswith("/") else f"/{entry.url}"
+        page_url = absolute_url(url_prefix, entry.url)
 
         out_dir = os.path.join(site_dir, redirect_path, entry.page_id)
         os.makedirs(out_dir, exist_ok=True)
@@ -59,6 +59,7 @@ def generate_netlify_redirects(
     index: IDIndex,
     redirect_path: str,
     site_dir: str,
+    url_prefix: str = "",
 ) -> None:
     """Write stablelinks redirect rules to _redirects at the site root.
 
@@ -68,12 +69,13 @@ def generate_netlify_redirects(
     """
     redirects_file = os.path.join(site_dir, "_redirects")
 
-    lines: List[str] = [_NETLIFY_HEADER]
+    lines: list[str] = [_NETLIFY_HEADER]
     for entry in index.all_entries():
         if entry.url is None:
             continue
-        page_url = entry.url if entry.url.startswith("/") else f"/{entry.url}"
-        lines.append(f"/{redirect_path}/{entry.page_id}/ {page_url} 301\n")
+        page_url = absolute_url(url_prefix, entry.url)
+        source = absolute_url(url_prefix, f"{redirect_path}/{entry.page_id}/")
+        lines.append(f"{source} {page_url} 301\n")
 
     if len(lines) == 1:
         # Nothing to write beyond the header
@@ -82,7 +84,7 @@ def generate_netlify_redirects(
     # Preserve any user-managed content that precedes the stablelinks block.
     existing = ""
     if os.path.exists(redirects_file):
-        with open(redirects_file, "r", encoding="utf-8") as fh:
+        with open(redirects_file, encoding="utf-8") as fh:
             content = fh.read()
         marker = content.find(_NETLIFY_HEADER)
         existing = content[:marker] if marker != -1 else content

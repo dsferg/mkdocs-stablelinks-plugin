@@ -1,7 +1,5 @@
 """Tests for redirect page generation."""
 
-import os
-import pytest
 
 from mkdocs_stablelinks.index import IDIndex, PageEntry
 from mkdocs_stablelinks.redirects import generate_html_redirects, generate_netlify_redirects
@@ -61,6 +59,15 @@ class TestHtmlRedirects:
         index = _make_index([("my-page", "page.md", "/page/")])
         generate_html_redirects(index, "links", str(tmp_path))
         assert (tmp_path / "links" / "my-page" / "index.html").exists()
+
+    def test_subpath_url_prefix(self, tmp_path):
+        """Sites hosted under a sub-path get the prefix on redirect targets."""
+        index = _make_index([("my-page", "page.md", "page/")])
+        generate_html_redirects(index, "go", str(tmp_path), url_prefix="/repo")
+
+        content = (tmp_path / "go" / "my-page" / "index.html").read_text()
+        assert 'url=/repo/page/' in content
+        assert 'href="/repo/page/"' in content
 
 
 class TestNetlifyRedirects:
@@ -125,3 +132,11 @@ class TestNetlifyRedirects:
         content = redirects_file.read_text()
         assert content.count("/old/ /new/ 301") == 1
         assert content.count("/go/my-page/ /page/ 301") == 1
+
+    def test_subpath_url_prefix(self, tmp_path):
+        """Sites hosted under a sub-path get the prefix on both source and target."""
+        index = _make_index([("my-page", "page.md", "page/")])
+        generate_netlify_redirects(index, "go", str(tmp_path), url_prefix="/repo")
+
+        content = (tmp_path / "_redirects").read_text()
+        assert "/repo/go/my-page/ /repo/page/ 301" in content
