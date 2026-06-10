@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented here.
 
+## [0.1.2] - 2026-06-10
+
+### Fixed
+- Redirect targets, Netlify rule paths, and index page URLs now include the sub-path from `site_url`, fixing redirects on sites hosted under a sub-path (e.g. GitHub Pages project sites).
+
+### Security
+- `redirect_path` config is validated against a strict character allowlist and checked to resolve inside the site directory.
+- Front-matter scanning is capped at 8 KB per file, with a warning when the closing delimiter falls outside the window.
+- GitHub Actions are SHA-pinned in all workflows, workflow permissions are restricted to `contents: read`, and Dependabot keeps action pins current.
+
+### Changed
+- Code-block placeholder restoration in the link resolver is now a single pass that tolerates stray sentinel sequences in source markdown.
+- Added ruff linting (with a CI lint job) and default pytest coverage reporting.
+
 ## [0.1.1] - 2026-04-03
 
 ### Fixed
