@@ -2,7 +2,6 @@
 
 import logging
 import os
-from typing import Optional
 
 from mkdocs.config.defaults import MkDocsConfig
 from mkdocs.plugins import BasePlugin
@@ -15,6 +14,7 @@ from .index import IDIndex
 from .index_page import generate_index_page
 from .redirects import generate_html_redirects, generate_netlify_redirects
 from .resolver import resolve_links
+from .validators import validate_redirect_path
 
 log = logging.getLogger("mkdocs.plugins.stablelinks")
 
@@ -31,8 +31,9 @@ class StablelinksPlugin(BasePlugin[StablelinksConfig]):
     # on_config
     # ------------------------------------------------------------------
 
-    def on_config(self, config: MkDocsConfig) -> Optional[MkDocsConfig]:
-        """Check macros plugin ordering and protected path collisions."""
+    def on_config(self, config: MkDocsConfig) -> MkDocsConfig | None:
+        """Validate redirect_path, check macros ordering and path collisions."""
+        validate_redirect_path(self.config["redirect_path"], config["site_dir"])
         check_macros_order(config)
         self._check_path_collision(config)
         return config
