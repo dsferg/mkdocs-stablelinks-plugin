@@ -2,7 +2,6 @@
 
 import logging
 from dataclasses import dataclass
-from typing import Dict, List, Optional
 
 import yaml
 from mkdocs.structure.files import Files
@@ -16,8 +15,8 @@ log = logging.getLogger("mkdocs.plugins.stablelinks")
 class PageEntry:
     page_id: str
     src_path: str
-    url: Optional[str] = None
-    title: Optional[str] = None
+    url: str | None = None
+    title: str | None = None
 
 
 class IDIndex:
@@ -25,9 +24,9 @@ class IDIndex:
 
     def __init__(self) -> None:
         # page_id → PageEntry
-        self._entries: Dict[str, PageEntry] = {}
+        self._entries: dict[str, PageEntry] = {}
         # src_path → page_id (to look up entries by source file)
-        self._by_src: Dict[str, str] = {}
+        self._by_src: dict[str, str] = {}
 
     def build(self, files: Files) -> None:
         """
@@ -40,7 +39,7 @@ class IDIndex:
         self._by_src.clear()
 
         # Registry maps page_id → src_path for duplicate detection
-        registry: Dict[str, str] = {}
+        registry: dict[str, str] = {}
 
         for file in files.documentation_pages():
             src_path = _normalize(file.src_path)
@@ -62,15 +61,15 @@ class IDIndex:
         if page_id is not None:
             self._entries[page_id].url = url
 
-    def populate_title(self, src_path: str, title: Optional[str]) -> None:
+    def populate_title(self, src_path: str, title: str | None) -> None:
         page_id = self._by_src.get(_normalize(src_path))
         if page_id is not None:
             self._entries[page_id].title = title
 
-    def resolve(self, page_id: str) -> Optional[PageEntry]:
+    def resolve(self, page_id: str) -> PageEntry | None:
         return self._entries.get(page_id)
 
-    def all_entries(self) -> List[PageEntry]:
+    def all_entries(self) -> list[PageEntry]:
         return sorted(self._entries.values(), key=lambda e: e.page_id)
 
     def __len__(self) -> int:
@@ -82,11 +81,14 @@ def _normalize(src_path: str) -> str:
     return src_path.replace("\\", "/")
 
 
-def _extract_id(abs_path: str) -> Optional[str]:
+_FRONT_MATTER_READ_LIMIT = 8192
+
+
+def _extract_id(abs_path: str) -> str | None:
     """Read front matter from a markdown file and return the id field, or None."""
     try:
         with open(abs_path, encoding="utf-8") as fh:
-            content = fh.read()
+            content = fh.read(_FRONT_MATTER_READ_LIMIT)
     except OSError:
         return None
 
@@ -96,6 +98,14 @@ def _extract_id(abs_path: str) -> Optional[str]:
     # Find the closing ---
     end = content.find("\n---", 3)
     if end == -1:
+        if len(content) >= _FRONT_MATTER_READ_LIMIT:
+            log.warning(
+                "mkdocs-stablelinks: Front matter in %s exceeds the %d-byte "
+                "read limit; closing '---' not found within that window. Any "
+                "'id' declared on this page will not be registered.",
+                abs_path,
+                _FRONT_MATTER_READ_LIMIT,
+            )
         return None
 
     front_matter_text = content[3:end].strip()
