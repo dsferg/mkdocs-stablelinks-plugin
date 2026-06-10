@@ -73,9 +73,17 @@ def resolve_links(
 
     result = _LINK_RE.sub(_replace, protected)
 
-    # Restore stashed code blocks
-    for i, code in enumerate(placeholders):
-        result = result.replace(f"\x00STABLELINKS{i}\x00", code)
+    # Restore stashed code blocks in a single pass. Out-of-range indices
+    # (which would only appear if the source markdown contained a literal
+    # sentinel) are left untouched rather than crashing the build.
+    if placeholders:
+        def _restore(m: re.Match) -> str:
+            idx = int(m.group(1))
+            if 0 <= idx < len(placeholders):
+                return placeholders[idx]
+            return m.group(0)
+
+        result = re.sub(r"\x00STABLELINKS(\d+)\x00", _restore, result)
 
     if unresolved:
         ids = ", ".join(f"'{i}'" for i in unresolved)

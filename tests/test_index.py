@@ -1,9 +1,10 @@
 """Tests for ID index construction."""
 
-import pytest
 from unittest.mock import MagicMock
 
+import pytest
 from mkdocs.exceptions import PluginError
+
 from mkdocs_stablelinks.index import IDIndex, _extract_id
 
 
@@ -55,6 +56,27 @@ class TestExtractId:
         f = tmp_path / "page.md"
         f.write_text("---\nid: my-page\n# no closing delimiter\n")
         assert _extract_id(str(f)) is None
+
+    def test_front_matter_beyond_read_limit(self, tmp_path, caplog):
+        """Front matter whose closing --- falls past 8 KB is not parsed,
+        and a warning is emitted naming the file."""
+        f = tmp_path / "page.md"
+        # Pad the front matter body so the closing --- is beyond 8192 bytes
+        padding = "padding: " + "x" * 8200 + "\n"
+        f.write_text(f"---\nid: hidden-id\n{padding}---\n\n# Content\n")
+        with caplog.at_level("WARNING", logger="mkdocs.plugins.stablelinks"):
+            assert _extract_id(str(f)) is None
+        assert "exceeds the 8192-byte read limit" in caplog.text
+        assert str(f) in caplog.text
+
+    def test_unclosed_front_matter_under_limit_is_silent(self, tmp_path, caplog):
+        """A genuinely malformed (unclosed) front matter under the read
+        limit returns None without emitting the read-limit warning."""
+        f = tmp_path / "page.md"
+        f.write_text("---\nid: my-page\n# no closing delimiter\n")
+        with caplog.at_level("WARNING", logger="mkdocs.plugins.stablelinks"):
+            assert _extract_id(str(f)) is None
+        assert "read limit" not in caplog.text
 
 
 class TestIDIndex:

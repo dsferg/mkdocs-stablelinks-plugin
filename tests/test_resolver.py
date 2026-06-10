@@ -1,11 +1,12 @@
 """Tests for id: link resolution."""
 
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 from mkdocs.exceptions import PluginError
 
 from mkdocs_stablelinks.index import IDIndex, PageEntry
-from mkdocs_stablelinks.resolver import resolve_links, _relative_md_path
+from mkdocs_stablelinks.resolver import _relative_md_path, resolve_links
 
 
 def _make_page(src_path, url):
@@ -107,3 +108,36 @@ class TestResolveLinks:
         result = resolve_links(md, page, index, "warn")
         assert "```\n[link](id:my-page)\n```" in result
         assert "[real](page.md)" in result
+
+    def test_multiple_code_blocks_restored_correctly(self):
+        index = _make_index([("my-page", "page.md", "/page/")])
+        page = _make_page("index.md", "/")
+
+        md = (
+            "```python\nprint('hello')\n```\n\n"
+            "[real link](id:my-page)\n\n"
+            "```js\nconsole.log('hi')\n```\n\n"
+            "Some `inline code` here.\n\n"
+            "~~~\nanother fence\n~~~"
+        )
+        result = resolve_links(md, page, index, "warn")
+        # The link should be resolved
+        assert "[real link](page.md)" in result
+        # All code blocks should be preserved verbatim
+        assert "```python\nprint('hello')\n```" in result
+        assert "```js\nconsole.log('hi')\n```" in result
+        assert "`inline code`" in result
+        assert "~~~\nanother fence\n~~~" in result
+
+    def test_stray_sentinel_in_source_is_preserved(self):
+        """A literal placeholder sentinel in source markdown that points
+        outside the placeholder list must not crash the build."""
+        index = _make_index([("my-page", "page.md", "/page/")])
+        page = _make_page("index.md", "/")
+
+        # Inline code stashes one placeholder (index 0); the bare sentinel
+        # for index 99 has no corresponding entry and must be left as-is.
+        md = "`code` and a stray \x00STABLELINKS99\x00 marker"
+        result = resolve_links(md, page, index, "warn")
+        assert "`code`" in result
+        assert "\x00STABLELINKS99\x00" in result
