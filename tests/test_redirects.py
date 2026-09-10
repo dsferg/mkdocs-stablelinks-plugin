@@ -140,3 +140,12 @@ class TestNetlifyRedirects:
 
         content = (tmp_path / "_redirects").read_text()
         assert "/repo/go/my-page/ /repo/page/ 301" in content
+
+
+class TestHtmlRedirectLineEndings:
+    def test_redirect_pages_always_use_lf(self, tmp_path):
+        index = _make_index([("my-page", "page.md", "/page/")])
+        generate_html_redirects(index, "go", str(tmp_path))
+
+        raw = (tmp_path / "go" / "my-page" / "index.html").read_bytes()
+        assert b"\r\n" not in raw

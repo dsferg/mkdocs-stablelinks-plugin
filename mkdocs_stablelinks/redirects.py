@@ -51,7 +51,9 @@ def generate_html_redirects(
         os.makedirs(out_dir, exist_ok=True)
         out_file = os.path.join(out_dir, "index.html")
 
-        with open(out_file, "w", encoding="utf-8") as fh:
+        # newline="" writes the template's line endings unchanged, so output
+        # is byte-identical whichever platform the site is built on.
+        with open(out_file, "w", encoding="utf-8", newline="") as fh:
             fh.write(_HTML_TEMPLATE.format(url=html_lib.escape(page_url)))
 
 
