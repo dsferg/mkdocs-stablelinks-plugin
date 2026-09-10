@@ -2,7 +2,7 @@
 
 
 from mkdocs_stablelinks.index import IDIndex, PageEntry
-from mkdocs_stablelinks.redirects import generate_html_redirects, generate_netlify_redirects
+from mkdocs_stablelinks.redirects import generate_html_redirects
 
 
 def _make_index(entries):
@@ -68,78 +68,6 @@ class TestHtmlRedirects:
         content = (tmp_path / "go" / "my-page" / "index.html").read_text()
         assert 'url=/repo/page/' in content
         assert 'href="/repo/page/"' in content
-
-
-class TestNetlifyRedirects:
-    def test_creates_redirects_file(self, tmp_path):
-        index = _make_index([("install-windows", "install/windows.md", "/install/windows/")])
-        generate_netlify_redirects(index, "go", str(tmp_path))
-
-        redirects_file = tmp_path / "_redirects"
-        assert redirects_file.exists()
-        content = redirects_file.read_text()
-        assert "/go/install-windows/ /install/windows/ 301" in content
-
-    def test_includes_header_comment(self, tmp_path):
-        index = _make_index([("api", "api.md", "/api/")])
-        generate_netlify_redirects(index, "go", str(tmp_path))
-
-        content = (tmp_path / "_redirects").read_text()
-        assert "# mkdocs-stablelinks" in content
-
-    def test_appends_to_existing_file(self, tmp_path):
-        existing = tmp_path / "_redirects"
-        existing.write_text("/old/ /new/ 301\n")
-
-        index = _make_index([("my-page", "page.md", "/page/")])
-        generate_netlify_redirects(index, "go", str(tmp_path))
-
-        content = existing.read_text()
-        assert "/old/ /new/ 301" in content
-        assert "/go/my-page/ /page/ 301" in content
-
-    def test_empty_index_writes_nothing(self, tmp_path):
-        index = _make_index([])
-        generate_netlify_redirects(index, "go", str(tmp_path))
-        assert not (tmp_path / "_redirects").exists()
-
-    def test_skips_entry_without_url(self, tmp_path):
-        index = _make_index([("no-url", "page.md", None)])
-        generate_netlify_redirects(index, "go", str(tmp_path))
-        # File may or may not exist, but must not contain the id
-        redirects_file = tmp_path / "_redirects"
-        if redirects_file.exists():
-            assert "no-url" not in redirects_file.read_text()
-
-    def test_repeated_build_does_not_duplicate_rules(self, tmp_path):
-        """Running generate_netlify_redirects twice must not create duplicate rules."""
-        index = _make_index([("my-page", "page.md", "/page/")])
-        generate_netlify_redirects(index, "go", str(tmp_path))
-        generate_netlify_redirects(index, "go", str(tmp_path))
-
-        content = (tmp_path / "_redirects").read_text()
-        assert content.count("/go/my-page/ /page/ 301") == 1
-
-    def test_repeated_build_preserves_user_rules(self, tmp_path):
-        """User-managed rules above the stablelinks block are kept on rebuild."""
-        redirects_file = tmp_path / "_redirects"
-        redirects_file.write_text("/old/ /new/ 301\n")
-
-        index = _make_index([("my-page", "page.md", "/page/")])
-        generate_netlify_redirects(index, "go", str(tmp_path))
-        generate_netlify_redirects(index, "go", str(tmp_path))
-
-        content = redirects_file.read_text()
-        assert content.count("/old/ /new/ 301") == 1
-        assert content.count("/go/my-page/ /page/ 301") == 1
-
-    def test_subpath_url_prefix(self, tmp_path):
-        """Sites hosted under a sub-path get the prefix on both source and target."""
-        index = _make_index([("my-page", "page.md", "page/")])
-        generate_netlify_redirects(index, "go", str(tmp_path), url_prefix="/repo")
-
-        content = (tmp_path / "_redirects").read_text()
-        assert "/repo/go/my-page/ /repo/page/ 301" in content
 
 
 class TestHtmlRedirectLineEndings:
