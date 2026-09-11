@@ -141,3 +141,163 @@ class TestResolveLinks:
         result = resolve_links(md, page, index, "warn")
         assert "`code`" in result
         assert "\x00STABLELINKS99\x00" in result
+
+
+class TestIndentedCodeBlocks:
+    """Four-space indented code must be protected, but indented list
+    continuations — which look the same to a naive check — must not be."""
+
+    def _resolve(self, md, on_unresolved="warn"):
+        index = _make_index([("alpha", "target.md", "/target/")])
+        return resolve_links(md, _make_page("index.md", "/"), index, on_unresolved)
+
+    def test_indented_code_block_preserved(self):
+        result = self._resolve("Intro:\n\n    [x](id:alpha)\n")
+        assert "    [x](id:alpha)" in result
+
+    def test_tab_indented_code_block_preserved(self):
+        result = self._resolve("Intro:\n\n\t[x](id:alpha)\n")
+        assert "id:alpha" in result
+
+    def test_indented_code_with_inline_code_preserved(self):
+        # The stashed block contains an inline-code placeholder, so restoring
+        # it has to handle a sentinel nested inside stashed text.
+        result = self._resolve("Intro:\n\n    a `b` and [x](id:alpha)\n")
+        assert "    a `b` and [x](id:alpha)" in result
+
+    def test_blank_separated_indented_chunks_preserved(self):
+        md = "Intro:\n\n    [a](id:alpha)\n\n    [b](id:alpha)\n"
+        result = self._resolve(md)
+        assert "    [a](id:alpha)" in result
+        assert "    [b](id:alpha)" in result
+
+    def test_ordered_list_continuation_resolves(self):
+        md = "1. Step\n\n    See [x](id:alpha).\n\n2. Next\n"
+        result = self._resolve(md)
+        assert "[x](target.md)" in result
+
+    def test_bullet_list_continuation_resolves(self):
+        md = "- Item\n\n  See [x](id:alpha).\n"
+        result = self._resolve(md)
+        assert "[x](target.md)" in result
+
+    def test_nested_list_item_resolves(self):
+        md = "- Outer\n    - Inner [x](id:alpha)\n"
+        result = self._resolve(md)
+        assert "[x](target.md)" in result
+
+    def test_code_block_inside_list_preserved(self):
+        md = "- Item\n\n        [x](id:alpha)\n"
+        result = self._resolve(md)
+        assert "        [x](id:alpha)" in result
+
+    def test_indented_line_without_preceding_blank_resolves(self):
+        # A lazy continuation of a paragraph is not a code block.
+        md = "Some text\n    and [x](id:alpha) more\n"
+        result = self._resolve(md)
+        assert "[x](target.md)" in result
+
+    def test_dedent_after_list_restores_top_level_code(self):
+        md = "- Item\n\nBack at top level:\n\n    [x](id:alpha)\n"
+        result = self._resolve(md)
+        assert "    [x](id:alpha)" in result
+
+    def test_unresolved_id_in_indented_code_does_not_warn(self, caplog):
+        self._resolve("Intro:\n\n    [x](id:nope)\n")
+        assert caplog.text == ""
+
+
+class TestReferenceDefinitions:
+    def _resolve(self, md, on_unresolved="warn"):
+        index = _make_index([("alpha", "target.md", "/target/")])
+        return resolve_links(md, _make_page("index.md", "/"), index, on_unresolved)
+
+    def test_reference_definition_resolved(self):
+        result = self._resolve("See [y][ref].\n\n[ref]: id:alpha\n")
+        assert "[ref]: target.md" in result
+        assert "id:alpha" not in result
+
+    def test_anchor_preserved(self):
+        result = self._resolve("[ref]: id:alpha#section\n")
+        assert "[ref]: target.md#section" in result
+
+    def test_title_preserved(self):
+        result = self._resolve('[ref]: id:alpha "A title"\n')
+        assert '[ref]: target.md "A title"' in result
+
+    def test_single_quoted_title_preserved(self):
+        result = self._resolve("[ref]: id:alpha 'A title'\n")
+        assert "[ref]: target.md 'A title'" in result
+
+    def test_leading_indent_preserved(self):
+        result = self._resolve("   [ref]: id:alpha\n")
+        assert "   [ref]: target.md" in result
+
+    def test_definition_in_code_block_preserved(self):
+        result = self._resolve("Intro:\n\n    [ref]: id:alpha\n")
+        assert "    [ref]: id:alpha" in result
+
+    def test_unresolved_definition_warns_and_preserves(self, caplog):
+        result = self._resolve("[ref]: id:nope\n")
+        assert "[ref]: id:nope" in result
+        assert "Unresolved id 'nope'" in caplog.text
+
+    def test_unresolved_definition_errors_when_configured(self):
+        with pytest.raises(PluginError, match="'nope'"):
+            self._resolve("[ref]: id:nope\n", on_unresolved="error")
+
+    def test_not_a_definition_when_indented_four_spaces_inline(self):
+        # Four or more spaces makes it a code block, not a definition.
+        result = self._resolve("Text\n\n    [ref]: id:alpha\n")
+        assert "id:alpha" in result
+
+    def test_inline_and_reference_both_resolved(self):
+        md = "[a](id:alpha) and [b][ref]\n\n[ref]: id:alpha\n"
+        result = self._resolve(md)
+        assert "[a](target.md)" in result
+        assert "[ref]: target.md" in result
+
+
+class TestEarlyExit:
+    def test_markdown_without_id_is_returned_unchanged(self):
+        index = _make_index([("alpha", "target.md", "/target/")])
+        md = "# Title\n\n    indented code\n\n- list\n\n`code` and [a](other.md)\n"
+        result = resolve_links(md, _make_page("index.md", "/"), index, "warn")
+        assert result == md
+
+    def test_early_exit_does_not_skip_reference_definitions(self):
+        # The ref-def form also contains "id:", so the shortcut must not
+        # cause it to be missed.
+        index = _make_index([("alpha", "target.md", "/target/")])
+        result = resolve_links("[r]: id:alpha\n", _make_page("index.md", "/"), index, "warn")
+        assert "[r]: target.md" in result
+
+
+class TestListIndentMatchesPythonMarkdown:
+    """Python-Markdown indents list content by a fixed four columns whatever
+    the marker's width, and does not accept '1)' as a marker. The scanner has
+    to agree, or it protects links that should resolve and vice versa."""
+
+    def _resolve(self, md):
+        index = _make_index([("alpha", "target.md", "/target/")])
+        return resolve_links(md, _make_page("index.md", "/"), index, "warn")
+
+    def test_six_spaces_in_bullet_is_continuation_not_code(self):
+        # Marker width would put code at six columns; Python-Markdown needs eight.
+        result = self._resolve("- item\n\n      [x](id:alpha)\n")
+        assert "[x](target.md)" in result
+
+    def test_eight_spaces_in_bullet_is_code(self):
+        result = self._resolve("- item\n\n        [x](id:alpha)\n")
+        assert "id:alpha" in result
+
+    def test_eight_spaces_under_wide_marker_is_code(self):
+        # '2026. ' is six columns wide, but content still indents by four.
+        result = self._resolve("2026. item\n\n        [x](id:alpha)\n")
+        assert "id:alpha" in result
+
+    def test_paren_marker_does_not_open_a_list(self):
+        # Python-Markdown renders '1) paren' as a paragraph, so the indented
+        # block after it is a plain code block.
+        result = self._resolve("1) paren\n\n    [x](id:alpha)\n")
+        assert "id:alpha" in result
