@@ -45,7 +45,9 @@ def generate_index_page(
 
     out_dir = os.path.join(site_dir, redirect_path)
     os.makedirs(out_dir, exist_ok=True)
-    with open(os.path.join(out_dir, "index.html"), "w", encoding="utf-8") as fh:
+    # newline="" keeps line endings as written, so output is byte-identical
+    # whichever platform the site is built on.
+    with open(os.path.join(out_dir, "index.html"), "w", encoding="utf-8", newline="") as fh:
         fh.write(html)
 
 

@@ -2,6 +2,8 @@
 
 from unittest.mock import MagicMock
 
+from mkdocs.structure.files import File, Files, InclusionLevel
+
 from mkdocs_stablelinks.index import PageEntry
 from mkdocs_stablelinks.plugin import StablelinksPlugin
 
@@ -13,20 +15,11 @@ def _make_plugin(**config_overrides):
     plugin = StablelinksPlugin()
     plugin.config = {
         "redirect_path": "go",
-        "redirect_mechanism": "both",
         "index_page": True,
         "on_unresolved": "warn",
         **config_overrides,
     }
     return plugin
-
-
-def _make_file(src_path, abs_src_path, url):
-    f = MagicMock()
-    f.src_path = src_path
-    f.abs_src_path = abs_src_path
-    f.dest_uri = url
-    return f
 
 
 def _make_page(src_path, url, title="Test Page"):
@@ -55,34 +48,36 @@ def _make_mkdocs_config(docs_dir, site_dir):
 # ---------------------------------------------------------------------------
 
 class TestOnConfig:
-    def test_warns_on_path_collision(self, tmp_path, caplog):
-        (tmp_path / "go").mkdir()
+    def test_accepts_valid_config(self, tmp_path):
         config = _make_mkdocs_config(str(tmp_path), str(tmp_path / "site"))
-
         plugin = _make_plugin(redirect_path="go")
-        plugin.on_config(config)
-
-        assert "conflicts with an existing directory" in caplog.text
+        assert plugin.on_config(config) is config
 
 
 # ---------------------------------------------------------------------------
 # on_files
 # ---------------------------------------------------------------------------
 
+def _make_files(tmp_path, specs, use_directory_urls=True):
+    """
+    specs: list of (rel_path, front_matter or None) tuples.
+    Returns a real Files collection over real source files.
+    """
+    file_objs = []
+    for rel_path, fm in specs:
+        full = tmp_path / rel_path
+        full.parent.mkdir(parents=True, exist_ok=True)
+        body = f"---\n{fm}\n---\n# Content\n" if fm else "# Content\n"
+        full.write_text(body)
+        file_objs.append(
+            File(rel_path, str(tmp_path), str(tmp_path / "site"), use_directory_urls)
+        )
+    return Files(file_objs)
+
+
 class TestOnFiles:
     def _make_files(self, tmp_path, specs):
-        file_mocks = []
-        for rel_path, fm in specs:
-            full = tmp_path / rel_path
-            full.parent.mkdir(parents=True, exist_ok=True)
-            full.write_text(f"---\n{fm}\n---\n# Content\n")
-            m = MagicMock()
-            m.src_path = rel_path
-            m.abs_src_path = str(full)
-            file_mocks.append(m)
-        files = MagicMock()
-        files.documentation_pages.return_value = file_mocks
-        return files
+        return _make_files(tmp_path, specs)
 
     def test_builds_index(self, tmp_path):
         files = self._make_files(tmp_path, [("page.md", "id: my-page")])
@@ -107,6 +102,77 @@ class TestOnFiles:
         plugin.on_files(files_v2, config)
         assert plugin._index.resolve("old-id") is None
         assert plugin._index.resolve("new-id") is not None
+
+
+# ---------------------------------------------------------------------------
+# Path collision detection
+# ---------------------------------------------------------------------------
+
+class TestPathCollisions:
+    def _run(self, tmp_path, specs, use_directory_urls=True, **config_overrides):
+        files = _make_files(tmp_path, specs, use_directory_urls)
+        config = _make_mkdocs_config(str(tmp_path), str(tmp_path / "site"))
+        plugin = _make_plugin(redirect_path="go", **config_overrides)
+        plugin.on_files(files, config)
+        return plugin
+
+    def test_page_overwritten_by_index_page(self, tmp_path, caplog):
+        # docs/go.md builds to go/index.html — exactly where the generated
+        # ID index page is written. No 'go' directory exists in docs_dir,
+        # so a source-path check misses this entirely.
+        self._run(tmp_path, [("go.md", None), ("index.md", "id: home")])
+        assert "'go.md' builds to 'go/index.html'" in caplog.text
+        assert "will overwrite it" in caplog.text
+
+    def test_index_page_in_redirect_dir_overwritten(self, tmp_path, caplog):
+        self._run(tmp_path, [("go/index.md", None), ("index.md", "id: home")])
+        assert "'go/index.md' builds to 'go/index.html'" in caplog.text
+
+    def test_page_overwritten_by_redirect_page(self, tmp_path, caplog):
+        # A page whose output path matches a generated redirect for id 'alpha'.
+        self._run(tmp_path, [("page.md", "id: alpha"), ("go/alpha/index.md", None)])
+        assert "'go/alpha/index.md' builds to 'go/alpha/index.html'" in caplog.text
+
+    def test_content_inside_redirect_path_warns_without_overwrite(self, tmp_path, caplog):
+        self._run(tmp_path, [("go/other.md", None)])
+        assert "1 file(s) build into redirect_path 'go'" in caplog.text
+        assert "will overwrite it" not in caplog.text
+
+    def test_many_inside_files_are_summarised(self, tmp_path, caplog):
+        specs = [(f"go/p{n}.md", None) for n in range(8)]
+        self._run(tmp_path, specs)
+        assert "8 file(s) build into redirect_path 'go'" in caplog.text
+        assert "and 3 more" in caplog.text
+
+    def test_no_overwrite_warning_when_no_ids_registered(self, tmp_path, caplog):
+        # With no IDs anywhere, generate_index_page writes nothing, so a page
+        # at go.md survives and must not be reported as overwritten.
+        self._run(tmp_path, [("go.md", None), ("index.md", None)])
+        assert "will overwrite it" not in caplog.text
+        assert "build into redirect_path 'go'" in caplog.text
+
+    def test_no_warning_without_collision(self, tmp_path, caplog):
+        self._run(tmp_path, [("index.md", "id: home"), ("going-further.md", None)])
+        assert caplog.text == ""
+
+    def test_no_warning_when_directory_urls_disabled(self, tmp_path, caplog):
+        # Without directory URLs, docs/go.md builds to go.html, which does
+        # not collide with the generated go/index.html.
+        self._run(tmp_path, [("go.md", None)], use_directory_urls=False)
+        assert caplog.text == ""
+
+    def test_index_page_disabled_downgrades_to_inside_warning(self, tmp_path, caplog):
+        self._run(tmp_path, [("go.md", None)], index_page=False)
+        assert "will overwrite it" not in caplog.text
+        assert "build into redirect_path 'go'" in caplog.text
+
+    def test_excluded_files_are_not_reported(self, tmp_path, caplog):
+        files = _make_files(tmp_path, [("go.md", None)])
+        for f in files:
+            f.inclusion = InclusionLevel.EXCLUDED
+        config = _make_mkdocs_config(str(tmp_path), str(tmp_path / "site"))
+        _make_plugin(redirect_path="go").on_files(files, config)
+        assert caplog.text == ""
 
 
 # ---------------------------------------------------------------------------
@@ -179,39 +245,6 @@ class TestOnPostBuild:
 
         plugin.on_post_build(config)
         assert (tmp_path / "go" / "my-page" / "index.html").exists()
-
-    def test_generates_netlify_redirects(self, tmp_path):
-        plugin = self._plugin_with_entry("my-page", "page.md", "/page/")
-        config = MagicMock()
-        config.__getitem__ = lambda self, key: str(tmp_path) if key == "site_dir" else None
-
-        plugin.on_post_build(config)
-        content = (tmp_path / "_redirects").read_text()
-        assert "/go/my-page/ /page/ 301" in content
-
-    def test_html_only_mechanism(self, tmp_path):
-        plugin = _make_plugin(redirect_mechanism="html")
-        entry = PageEntry(page_id="pg", src_path="p.md", url="/p/")
-        plugin._index._entries["pg"] = entry
-
-        config = MagicMock()
-        config.__getitem__ = lambda self, key: str(tmp_path) if key == "site_dir" else None
-
-        plugin.on_post_build(config)
-        assert (tmp_path / "go" / "pg" / "index.html").exists()
-        assert not (tmp_path / "_redirects").exists()
-
-    def test_netlify_only_mechanism(self, tmp_path):
-        plugin = _make_plugin(redirect_mechanism="netlify")
-        entry = PageEntry(page_id="pg", src_path="p.md", url="/p/")
-        plugin._index._entries["pg"] = entry
-
-        config = MagicMock()
-        config.__getitem__ = lambda self, key: str(tmp_path) if key == "site_dir" else None
-
-        plugin.on_post_build(config)
-        assert not (tmp_path / "go" / "pg").exists()
-        assert (tmp_path / "_redirects").exists()
 
     def test_index_page_disabled(self, tmp_path):
         plugin = _make_plugin(index_page=False)

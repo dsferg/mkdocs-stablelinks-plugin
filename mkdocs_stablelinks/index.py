@@ -1,14 +1,11 @@
 """ID index construction and lookup."""
 
-import logging
 from dataclasses import dataclass
 
-import yaml
 from mkdocs.structure.files import Files
+from mkdocs.utils.meta import get_data
 
 from .validators import validate_and_register
-
-log = logging.getLogger("mkdocs.plugins.stablelinks")
 
 
 @dataclass
@@ -43,11 +40,12 @@ class IDIndex:
 
         for file in files.documentation_pages():
             src_path = _normalize(file.src_path)
-            abs_path = file.abs_src_path
-            if abs_path is None:
+
+            content = _read_source(file)
+            if content is None:
                 continue
 
-            page_id = _extract_id(abs_path)
+            page_id = _extract_id(content)
             if page_id is None:
                 continue
 
@@ -81,41 +79,27 @@ def _normalize(src_path: str) -> str:
     return src_path.replace("\\", "/")
 
 
-_FRONT_MATTER_READ_LIMIT = 8192
-
-
-def _extract_id(abs_path: str) -> str | None:
-    """Read front matter from a markdown file and return the id field, or None."""
+def _read_source(file) -> str | None:
+    """Return a file's source text, or None if it cannot be read."""
     try:
-        with open(abs_path, encoding="utf-8") as fh:
-            content = fh.read(_FRONT_MATTER_READ_LIMIT)
-    except OSError:
+        # content_string decodes as utf-8-sig, so a byte-order mark does not
+        # hide the front matter, and it also covers files that other plugins
+        # generate in memory, which have no path on disk.
+        return file.content_string
+    except (OSError, ValueError):
+        # Unreadable or undecodable. MkDocs reports the failure itself when
+        # it reads the same file, so stay quiet here.
         return None
 
-    if not content.startswith("---"):
-        return None
 
-    # Find the closing ---
-    end = content.find("\n---", 3)
-    if end == -1:
-        if len(content) >= _FRONT_MATTER_READ_LIMIT:
-            log.warning(
-                "mkdocs-stablelinks: Front matter in %s exceeds the %d-byte "
-                "read limit; closing '---' not found within that window. Any "
-                "'id' declared on this page will not be registered.",
-                abs_path,
-                _FRONT_MATTER_READ_LIMIT,
-            )
-        return None
+def _extract_id(content: str) -> str | None:
+    """Return the id declared in a document's front matter, or None.
 
-    front_matter_text = content[3:end].strip()
-    try:
-        data = yaml.safe_load(front_matter_text)
-    except yaml.YAMLError:
-        return None
-
-    if not isinstance(data, dict):
-        return None
+    Parsing is delegated to MkDocs' own front-matter reader so the index sees
+    exactly the metadata MkDocs puts on page.meta — including front matter
+    closed with '...' rather than '---'.
+    """
+    _, data = get_data(content)
 
     page_id = data.get("id")
     if page_id is None:

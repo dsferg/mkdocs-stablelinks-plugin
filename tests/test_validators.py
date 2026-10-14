@@ -87,7 +87,7 @@ def test_redirect_path_absolute(tmp_path):
     "go\nlinks",       # newline
     "GO",              # uppercase
     "go!",             # special character
-    "go links\t301",   # tab (Netlify syntax injection)
+    "go links\t301",   # tab
     "go/",             # trailing slash
     "go//links",       # double slash
     "go/links/",       # trailing slash after segment

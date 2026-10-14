@@ -1,7 +1,6 @@
 """Main plugin class and MkDocs hook implementations."""
 
 import logging
-import os
 
 from mkdocs.config.defaults import MkDocsConfig
 from mkdocs.plugins import BasePlugin
@@ -12,7 +11,7 @@ from .compat import check_macros_order
 from .config import StablelinksConfig
 from .index import IDIndex
 from .index_page import generate_index_page
-from .redirects import generate_html_redirects, generate_netlify_redirects
+from .redirects import generate_html_redirects
 from .resolver import resolve_links
 from .utils import url_prefix
 from .validators import validate_redirect_path
@@ -33,10 +32,9 @@ class StablelinksPlugin(BasePlugin[StablelinksConfig]):
     # ------------------------------------------------------------------
 
     def on_config(self, config: MkDocsConfig) -> MkDocsConfig | None:
-        """Validate redirect_path, check macros ordering and path collisions."""
+        """Validate redirect_path and check macros ordering."""
         validate_redirect_path(self.config["redirect_path"], config["site_dir"])
         check_macros_order(config)
-        self._check_path_collision(config)
         return config
 
     # ------------------------------------------------------------------
@@ -53,18 +51,72 @@ class StablelinksPlugin(BasePlugin[StablelinksConfig]):
         self._index = IDIndex()
         self._index.build(files)
         log.debug("mkdocs-stablelinks: Indexed %d page IDs.", len(self._index))
+        self._check_path_collisions(files)
         return files
 
-    def _check_path_collision(self, config: MkDocsConfig) -> None:
+    def _generated_dest_uris(self) -> set[str]:
+        """Output paths this plugin will write during on_post_build."""
         redirect_path = self.config["redirect_path"]
-        docs_dir = config["docs_dir"]
-        collision_path = os.path.join(docs_dir, redirect_path)
-        if os.path.exists(collision_path):
+        generated = set()
+
+        # The index page is only written when at least one ID is registered,
+        # so a site that has not adopted any IDs yet must not be warned that
+        # its own page at <redirect_path>/ will be overwritten.
+        if self.config["index_page"] and len(self._index) > 0:
+            generated.add(f"{redirect_path}/index.html")
+
+        for entry in self._index.all_entries():
+            generated.add(f"{redirect_path}/{entry.page_id}/index.html")
+
+        return generated
+
+    def _check_path_collisions(self, files: Files) -> None:
+        """
+        Warn when site content is built into the redirect path.
+
+        Compares against build *output* paths rather than source paths: a
+        page at docs/go.md builds to 'go/index.html' and is overwritten by
+        the generated index page, even though no 'go' directory exists in
+        docs_dir.
+        """
+        redirect_path = self.config["redirect_path"]
+        prefix = f"{redirect_path}/"
+        generated = self._generated_dest_uris()
+
+        overwritten: list[tuple[str, str]] = []
+        inside: list[str] = []
+
+        for file in files:
+            # Excluded files are never written, so they cannot collide.
+            if not file.inclusion.is_included():
+                continue
+
+            if file.dest_uri in generated:
+                overwritten.append((file.src_uri, file.dest_uri))
+            elif file.dest_uri.startswith(prefix):
+                inside.append(file.src_uri)
+
+        for src_uri, dest_uri in sorted(overwritten):
             log.warning(
-                "mkdocs-stablelinks: redirect_path '%s' conflicts with an "
-                "existing directory in docs_dir. Redirect pages may overwrite "
-                "existing content.",
+                "mkdocs-stablelinks: '%s' builds to '%s', which mkdocs-stablelinks "
+                "also generates. The generated page will overwrite it. Move the "
+                "page, or set redirect_path to a path the site does not use.",
+                src_uri,
+                dest_uri,
+            )
+
+        if inside:
+            shown = sorted(inside)
+            listing = ", ".join(shown[:5])
+            if len(shown) > 5:
+                listing += f", and {len(shown) - 5} more"
+            log.warning(
+                "mkdocs-stablelinks: %d file(s) build into redirect_path '%s', "
+                "which is reserved for generated redirect pages: %s. Move them, "
+                "or set redirect_path to a path the site does not use.",
+                len(shown),
                 redirect_path,
+                listing,
             )
 
     # ------------------------------------------------------------------
@@ -119,16 +171,11 @@ class StablelinksPlugin(BasePlugin[StablelinksConfig]):
         """Generate redirect pages and the index page."""
         site_dir = config["site_dir"]
         redirect_path = self.config["redirect_path"]
-        mechanism = self.config["redirect_mechanism"]
         # Sites hosted under a sub-path (e.g. GitHub Pages project sites)
         # need that sub-path prepended to absolute redirect URLs.
         prefix = url_prefix(config["site_url"])
 
-        if mechanism in ("html", "both"):
-            generate_html_redirects(self._index, redirect_path, site_dir, prefix)
-
-        if mechanism in ("netlify", "both"):
-            generate_netlify_redirects(self._index, redirect_path, site_dir, prefix)
+        generate_html_redirects(self._index, redirect_path, site_dir, prefix)
 
         if self.config["index_page"]:
             generate_index_page(
